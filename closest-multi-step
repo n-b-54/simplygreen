@@ -1,0 +1,218 @@
+<script src="https://cdn.jsdelivr.net/gh/brotame/advanced-webflow-forms@1.1/dist/awf.js"></script>
+<script>
+// Set up Mutation Observers for all relevant range slider components
+const targetElements = document.querySelectorAll('.fs_rangeslider-1_component, .fs_rangeslider-2_component');
+let scriptLoaded = false;
+
+targetElements.forEach(targetElement => {
+    let observer = new MutationObserver(function (mutationsList) {
+        for (let mutation of mutationsList) {
+            if (mutation.attributeName === 'aria-hidden' &&
+                !targetElement.hasAttribute('aria-hidden') &&
+                !scriptLoaded) {
+                // Load the Finsweet Range Slider script once
+                scriptLoaded = true;
+                let scriptElement = document.createElement('script');
+                scriptElement.src = 'https://cdn.jsdelivr.net/npm/@finsweet/attributes-rangeslider@1/rangeslider.js';
+                document.head.appendChild(scriptElement);
+                observer.disconnect(); // Stop the observer
+                break;
+            }
+        }
+    });
+
+    // Start observing each element
+    observer.observe(targetElement, { attributes: true, subtree: true });
+});
+
+var Webflow = Webflow || [];
+Webflow.push(function () {
+    $(document).ready(function () {
+        // Prevent form submission via Enter key
+        $(document).keypress(function (event) {
+            if (event.which === 13) {
+                event.preventDefault();
+            }
+        });
+
+        // Prevent Tab key navigation
+        $(document).keydown(function (event) {
+            if (event.keyCode === 9) {
+                event.preventDefault();
+            }
+        });
+
+        // Prevent form submission and setup form behaviors
+        $('form').removeAttr('action');
+        $('form').on('submit', function (e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // Slider progress setup
+        const slideNumber = $('.w-slide').length - 1;
+
+        function updateProgress() {
+            const currentSlide = $('.w-slider-dot.w-active').index();
+            const percent = (currentSlide / slideNumber) * 100;
+            $('.form_progress-fill').css('width', percent + '%');
+
+            // Show/hide back button on the first slide
+            if (currentSlide === 0) {
+                $('.w-slider-arrow-left').hide();
+            } else {
+                $('.w-slider-arrow-left').show();
+            }
+        }
+
+        function moveToNextSlide() {
+            $('.w-slider-arrow-right').trigger('click');
+        }
+
+        // Auto-advance handlers
+        $('select[name="employer-type"]').on('change', function () {
+            calculateTotals();
+            moveToNextSlide();
+        });
+
+        $('input[name="annual-salary"]').on('keypress', function (e) {
+            if (e.which === 13 && $(this).val() > 0) {
+                moveToNextSlide();
+            }
+        });
+
+        $('input[name="annual-salary"]').on('input', function () {
+            calculateTotals();
+        });
+
+        $('input[name="hecs"]').on('change', function () {
+            calculateTotals();
+            moveToNextSlide();
+        });
+
+        $('.w-slider-arrow-right').click(function () {
+            setTimeout(updateProgress, 200);
+        });
+
+        $('.w-slider-arrow-left').click(function (e) {
+            e.preventDefault();
+            const currentSlide = $('.w-slider-dot.w-active').index();
+            if (currentSlide > 0) {
+                setTimeout(updateProgress, 200);
+            }
+        });
+
+        // Initialize range sliders
+        function initializeRangeSliders() {
+            $('input[name="general-living"]').on('input', function () {
+                const value = $(this).val();
+                $(this).closest('[fs-rangeslider-element="wrapper"]')
+                    .find('[fs-rangeslider-element="display-value"]')
+                    .text(value);
+                calculateTotals();
+            });
+
+            $('input[name="meal-entertainment"]').on('input', function () {
+                const value = $(this).val();
+                $(this).closest('[fs-rangeslider-element="wrapper"]')
+                    .find('[fs-rangeslider-element="display-value"]')
+                    .text(value);
+                calculateTotals();
+            });
+        }
+
+        setTimeout(initializeRangeSliders, 1000); // Delay ensures Finsweet script is loaded
+
+        // Calculator logic
+        function calculateTotals() {
+            const salary = parseFloat($('input[name="annual-salary"]').val()) || 0;
+            const generalLiving = parseFloat($('input[name="general-living"]').val()) || 0;
+            const mealEntertainment = parseFloat($('input[name="meal-entertainment"]').val()) || 0;
+            const hasHECS = $('input[name="hecs"][value="yes"]').is(':checked');
+            const employerType = $('select[name="employer-type"]').val();
+
+            const SP_FEE = 199.00;
+            const TYPE_2_GROSS_UP_RATE = 1.8868;
+            const REBATEABLE_SHORTCUT_RATE = 0.47;
+
+            const TAX_BRACKETS = [
+                { threshold: 0, rate: 0, fixed: 0 },
+                { threshold: 18200, rate: 0.16, fixed: 0 },
+                { threshold: 45000, rate: 0.30, fixed: 4288 },
+                { threshold: 135000, rate: 0.37, fixed: 31288 },
+                { threshold: 190000, rate: 0.45, fixed: 51638 }
+            ];
+
+            const HECS_RATES = [
+                { threshold: 0, rate: 0 },
+                { threshold: 54435, rate: 0.01 },
+                { threshold: 62851, rate: 0.02 },
+                { threshold: 66621, rate: 0.025 },
+                { threshold: 70619, rate: 0.03 },
+                { threshold: 74856, rate: 0.035 },
+                { threshold: 79347, rate: 0.04 },
+                { threshold: 84108, rate: 0.045 },
+                { threshold: 89155, rate: 0.05 },
+                { threshold: 94504, rate: 0.055 },
+                { threshold: 100175, rate: 0.06 },
+                { threshold: 106186, rate: 0.065 },
+                { threshold: 112557, rate: 0.07 },
+                { threshold: 119310, rate: 0.075 },
+                { threshold: 126468, rate: 0.08 },
+                { threshold: 134057, rate: 0.085 },
+                { threshold: 142101, rate: 0.09 },
+                { threshold: 150627, rate: 0.095 },
+                { threshold: 159664, rate: 0.10 }
+            ];
+
+            const MEDICARE_THRESHOLDS = [
+                { threshold: 0, rate: 0 },
+                { threshold: 26000, rate: 0.02 }
+            ];
+
+            const totalPackagedAmount = generalLiving + mealEntertainment + SP_FEE;
+            const taxableIncome = salary - totalPackagedAmount;
+
+            function calculatePAYG(income) {
+                const bracket = TAX_BRACKETS.find(b => income > b.threshold) || TAX_BRACKETS[0];
+                const variableComponent = (income - bracket.threshold) * bracket.rate;
+                return bracket.fixed + variableComponent;
+            }
+
+            function calculateMedicare(income) {
+                return MEDICARE_THRESHOLDS.reduce((acc, threshold) => {
+                    return income > threshold.threshold ? income * threshold.rate : acc;
+                }, 0);
+            }
+
+            function calculateHECS(income) {
+                if (!hasHECS) return 0;
+                const hecsAssessableIncome = income + (totalPackagedAmount * TYPE_2_GROSS_UP_RATE);
+                return HECS_RATES.reduce((acc, rate) => {
+                    return hecsAssessableIncome > rate.threshold ? hecsAssessableIncome * rate.rate : acc;
+                }, 0);
+            }
+
+            const payg = calculatePAYG(taxableIncome);
+            const medicare = calculateMedicare(taxableIncome);
+            const hecs = calculateHECS(taxableIncome);
+            const packagedTakeHome = taxableIncome - payg - medicare - hecs + totalPackagedAmount;
+
+            const nonPackagedTakeHome = salary - calculatePAYG(salary) - calculateMedicare(salary) - calculateHECS(salary);
+            const annualSavings = packagedTakeHome - nonPackagedTakeHome;
+
+            $('.calculator-results .total-take-home').text(new Intl.NumberFormat('en-AU', {
+                style: 'currency',
+                currency: 'AUD'
+            }).format(packagedTakeHome));
+
+            $('.calculator-results .annual-savings').text(new Intl.NumberFormat('en-AU', {
+                style: 'currency',
+                currency: 'AUD'
+            }).format(annualSavings));
+        }
+
+        updateProgress();
+    });
+});
+</script>
